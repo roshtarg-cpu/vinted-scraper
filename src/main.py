@@ -1,8 +1,7 @@
-"""Main Vinted scraper actor."""
-import os
-import asyncio
-from apify import Actor
-from .utils import _fetch
+"""Main Vinted scraper actor using PlaywrightCrawler."""
+from apify import Actor, Request
+from apify.storages import Dataset
+from crawlee.playwright_crawler import PlaywrightCrawler, PlaywrightCrawlingContext
 from .parser import parse_catalog, parse_listing
 
 
@@ -15,82 +14,61 @@ async def main():
         max_results = actor_input.get('maxResults', 50)
         proxy_config = actor_input.get('proxyConfiguration', {})
         
-        # Build proxy URL
-        proxy_url = None
-        if proxy_config and proxy_config.get('useApifyProxy'):
-            proxy_password = os.getenv('APIFY_PROXY_PASSWORD')
-            groups = proxy_config.get('apifyProxyGroups', ['RESIDENTIAL'])
-            group = groups[0] if groups else 'RESIDENTIAL'
-            country = proxy_config.get('apifyProxyCountry', 'US')
-            # Correct Apify proxy format
-            proxy_url = f'http://groups-{group},{country}:{proxy_password}@proxy.apify.com:8000'
-        
-        Actor.log.info(f'Starting Vinted scraper: {search_url}')
-        Actor.log.info(f'Target: {max_results} items')
-        Actor.log.info(f'Proxy: {proxy_url[:50] if proxy_url else "None"}...')
-        
         scraped_count = 0
-        page_num = 1
+        dataset = await Dataset.open()
         
-        while scraped_count < max_results:
-            # Build catalog URL with pagination
-            catalog_url = f'{search_url}?page={page_num}'
+        # Router for different page types
+        async def catalog_handler(context: PlaywrightCrawlingContext):
+            """Handle catalog pages."""
+            Actor.log.info(f'Crawling catalog: {context.request.url}')
             
-            Actor.log.info(f'Fetching catalog page {page_num}: {catalog_url}')
-            
-            # Fetch catalog page with retries
-            html = None
-            for attempt in range(3):
-                html = await _fetch(catalog_url, proxy_url)
-                if html:
-                    break
-                Actor.log.warning(f'Catalog fetch attempt {attempt + 1} failed, retrying...')
-                await asyncio.sleep(2 ** attempt)
-            
-            if not html:
-                Actor.log.error(f'Failed to fetch catalog page {page_num} after 3 attempts')
-                break
-            
-            # Parse item URLs
+            html = await context.page.content()
             item_urls = parse_catalog(html)
             
-            if not item_urls:
-                Actor.log.info(f'No items found on page {page_num}, stopping')
-                break
+            Actor.log.info(f'Found {len(item_urls)} items')
             
-            Actor.log.info(f'Found {len(item_urls)} items on page {page_num}')
-            
-            # Scrape each item
-            for item_url in item_urls:
+            # Enqueue item URLs
+            for url in item_urls[:max_results]:
                 if scraped_count >= max_results:
                     break
-                
-                # Fetch item page with retries
-                item_html = None
-                for attempt in range(3):
-                    item_html = await _fetch(item_url, proxy_url)
-                    if item_html:
-                        break
-                    await asyncio.sleep(2 ** attempt)
-                
-                if not item_html:
-                    Actor.log.warning(f'Failed to fetch item {item_url}')
-                    continue
-                
-                # Parse item
-                item = parse_listing(item_html)
-                
-                if item and item.get('title'):
-                    # Push to dataset immediately
-                    await Actor.push_data(item)
-                    scraped_count += 1
-                    
-                    # Log progress every 10 items
-                    if scraped_count % 10 == 0:
-                        Actor.log.info(f'Progress: {scraped_count}/{max_results} items scraped')
-                else:
-                    Actor.log.warning(f'Failed to parse item {item_url}')
+                await context.add_requests([Request.from_url(url, label='item')])
+        
+        async def item_handler(context: PlaywrightCrawlingContext):
+            """Handle item pages."""
+            nonlocal scraped_count
             
-            page_num += 1
+            if scraped_count >= max_results:
+                return
+            
+            Actor.log.info(f'Scraping item: {context.request.url}')
+            
+            html = await context.page.content()
+            item = parse_listing(html)
+            
+            if item and item.get('title'):
+                await dataset.push_data(item)
+                scraped_count += 1
+                
+                if scraped_count % 10 == 0:
+                    Actor.log.info(f'Progress: {scraped_count}/{max_results} items')
+            else:
+                Actor.log.warning(f'Failed to parse item {context.request.url}')
+        
+        # Create crawler
+        crawler = PlaywrightCrawler(
+            headless=True,
+            browser_type='chromium',
+            proxy_configuration=await Actor.create_proxy_configuration(proxy_config) if proxy_config.get('useApifyProxy') else None,
+            request_handler_timeout_secs=120,
+            max_request_retries=3,
+        )
+        
+        # Add router
+        crawler.router.default_handler = catalog_handler
+        crawler.router.add_handler('item', item_handler)
+        
+        # Start crawling
+        Actor.log.info(f'Starting Vinted scraper: {search_url}')
+        await crawler.run([search_url])
         
         Actor.log.info(f'Scraping complete! Total items: {scraped_count}')
