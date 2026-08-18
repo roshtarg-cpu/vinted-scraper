@@ -13,12 +13,29 @@ def _extract_next_data(html):
         dict or None
     """
     try:
-        match = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', html, re.DOTALL)
-        if match:
-            return json.loads(match.group(1))
+        # Try multiple patterns
+        patterns = [
+            r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>',
+            r'<script[^>]*id="__NEXT_DATA__"[^>]*>(.*?)</script>',
+            r'__NEXT_DATA__["\']?\s*=\s*({.*?})\s*;?\s*</script>',
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, html, re.DOTALL)
+            if match:
+                json_str = match.group(1).strip()
+                data = json.loads(json_str)
+                print(f"Found __NEXT_DATA__ via pattern: {pattern[:50]}")
+                return data
+        
+        print("No __NEXT_DATA__ match found in HTML")
+        return None
+    except json.JSONDecodeError as e:
+        print(f"__NEXT_DATA__ JSON decode error: {e}")
+        return None
     except Exception as e:
-        print(f"__NEXT_DATA__ extraction failed: {e}")
-    return None
+        print(f"__NEXT_DATA__ extraction error: {e}")
+        return None
 
 
 def parse_listing(html):
