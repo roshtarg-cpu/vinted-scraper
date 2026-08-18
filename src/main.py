@@ -1,7 +1,7 @@
 """Main Vinted scraper actor using PlaywrightCrawler."""
 from apify import Actor, Request
 from apify.storages import Dataset
-from crawlee.playwright_crawler import PlaywrightCrawler, PlaywrightCrawlingContext
+from crawlee.playwright import PlaywrightCrawler, PlaywrightCrawlingContext
 from .parser import parse_catalog, parse_listing
 
 
