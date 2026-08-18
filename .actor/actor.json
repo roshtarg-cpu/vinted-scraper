@@ -5,56 +5,5 @@
   "description": "Extract secondhand fashion listings from Vinted.com. Get prices, brands, sizes, conditions, seller info. Works with Claude, ChatGPT, and AI agents via Apify MCP. Built for market research, price monitoring, and trend analysis.",
   "version": "0.1",
   "buildTag": "latest",
-  "dockerfile": "./Dockerfile",
-  "output": {
-    "schema": {
-      "actorOutputSchemaVersion": 1,
-      "properties": {
-        "id": {
-          "type": "string",
-          "template": "{{{id}}}"
-        },
-        "title": {
-          "type": "string",
-          "template": "{{{title}}}"
-        },
-        "price": {
-          "type": "string",
-          "template": "{{{price}}}"
-        },
-        "currency": {
-          "type": "string",
-          "template": "{{{currency}}}"
-        },
-        "brand": {
-          "type": "string",
-          "template": "{{{brand}}}"
-        },
-        "size": {
-          "type": "string",
-          "template": "{{{size}}}"
-        },
-        "condition": {
-          "type": "string",
-          "template": "{{{condition}}}"
-        },
-        "url": {
-          "type": "string",
-          "template": "{{{url}}}"
-        },
-        "description": {
-          "type": "string",
-          "template": "{{{description}}}"
-        },
-        "user_login": {
-          "type": "string",
-          "template": "{{{user_login}}}"
-        },
-        "scrapedAt": {
-          "type": "string",
-          "template": "{{{scrapedAt}}}"
-        }
-      }
-    }
-  }
+  "dockerfile": "./Dockerfile"
 }
