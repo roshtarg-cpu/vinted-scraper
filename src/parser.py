@@ -33,9 +33,9 @@ def parse_listing(html):
     if next_data:
         try:
             item = next_data.get('props', {}).get('pageProps', {}).get('item', {})
-            if item:
-                return {
-                    'id': item.get('id'),
+            if item and item.get('id'):
+                result = {
+                    'id': str(item.get('id')),
                     'title': item.get('title'),
                     'price': item.get('price'),
                     'currency': item.get('currency'),
@@ -43,26 +43,42 @@ def parse_listing(html):
                     'size': item.get('size_title'),
                     'condition': item.get('status'),
                     'url': item.get('url'),
-                    'photos': [p.get('url') for p in item.get('photos', [])[:3]],
+                    'photos': [p.get('url') for p in item.get('photos', [])[:3] if p.get('url')],
                     'description': item.get('description'),
-                    'user_id': item.get('user', {}).get('id'),
+                    'user_id': str(item.get('user', {}).get('id')) if item.get('user', {}).get('id') else None,
                     'user_login': item.get('user', {}).get('login'),
                     'created_at': item.get('created_at_ts'),
                     'scrapedAt': datetime.now(timezone.utc).isoformat()
                 }
+                print(f"Successfully parsed item: {result.get('title')}")
+                return result
+            else:
+                print(f"__NEXT_DATA__ item has no ID: {list(item.keys())[:10]}")
         except Exception as e:
-            print(f"__NEXT_DATA__ parse failed: {e}")
+            print(f"__NEXT_DATA__ parse error: {e}")
+    else:
+        print("No __NEXT_DATA__ found in HTML")
     
     # Fallback to HTML parsing
     soup = BeautifulSoup(html, 'html.parser')
     
-    return {
-        'title': soup.select_one('h1.item-title')['data-title'] if soup.select_one('h1.item-title') else None,
-        'price': soup.select_one('.item-price')['data-price'] if soup.select_one('.item-price') else None,
-        'brand': soup.select_one('.item-brand')['data-brand'] if soup.select_one('.item-brand') else None,
-        'size': soup.select_one('.item-size')['data-size'] if soup.select_one('.item-size') else None,
+    title_elem = soup.select_one('h1.item-title, h1[itemprop="name"]')
+    title = title_elem.get('data-title') or title_elem.text.strip() if title_elem else None
+    
+    result = {
+        'title': title,
+        'price': soup.select_one('.item-price, [itemprop="price"]').get('content') if soup.select_one('.item-price, [itemprop="price"]') else None,
+        'brand': soup.select_one('.item-brand').text.strip() if soup.select_one('.item-brand') else None,
+        'size': soup.select_one('.item-size').text.strip() if soup.select_one('.item-size') else None,
         'scrapedAt': datetime.now(timezone.utc).isoformat()
     }
+    
+    if result.get('title'):
+        print(f"Fallback parsed: {result.get('title')}")
+        return result
+    
+    print("Fallback parsing also failed - no title found")
+    return None
 
 
 def parse_catalog(html):
