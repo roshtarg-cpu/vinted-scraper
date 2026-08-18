@@ -72,23 +72,40 @@ def parse_catalog(html):
     Returns:
         list of item URLs
     """
+    urls = []
+    
     # Try __NEXT_DATA__
     next_data = _extract_next_data(html)
     if next_data:
         try:
             items = next_data.get('props', {}).get('pageProps', {}).get('items', [])
-            return [item.get('url') for item in items if item.get('url')]
-        except:
-            pass
+            for item in items:
+                url = item.get('url')
+                if url:
+                    # Make URL absolute if needed
+                    if url.startswith('/'):
+                        url = 'https://www.vinted.com' + url
+                    urls.append(url)
+            
+            if urls:
+                return urls
+        except Exception as e:
+            print(f"__NEXT_DATA__ catalog parse error: {e}")
     
     # Fallback to HTML
     soup = BeautifulSoup(html, 'html.parser')
-    links = soup.select('a.item-box__link, a[href*="/items/"]')
     
-    urls = []
+    # Try multiple selectors
+    links = soup.select('a.ItemBox_overlay__1kNfX, a[href*="/items/"], a.item-box__overlay')
+    
     for link in links:
         href = link.get('href', '')
-        if '/items/' in href and href.startswith('http'):
+        if '/items/' in href:
+            # Make URL absolute
+            if href.startswith('/'):
+                href = 'https://www.vinted.com' + href
+            elif not href.startswith('http'):
+                continue
             urls.append(href)
     
     return list(set(urls))  # dedupe

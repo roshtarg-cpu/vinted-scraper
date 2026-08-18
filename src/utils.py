@@ -75,6 +75,10 @@ async def _fetch(url, proxy_url=None):
             
             html = await page.content()
             
+            # Debug: log HTML length and first 500 chars
+            print(f"Fetched {url}: {len(html)} bytes")
+            print(f"First 500 chars: {html[:500]}")
+            
             # Validate response
             if not response or response.status >= 400:
                 print(f"Bad response status: {response.status if response else 'None'}")
