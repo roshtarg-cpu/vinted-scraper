@@ -38,10 +38,10 @@ async def _fetch(url, proxy_url=None):
         page = await browser.new_page()
         
         try:
-            response = await page.goto(url, wait_until='networkidle', timeout=90000)
+            response = await page.goto(url, wait_until='networkidle', timeout=120000)
             
-            # Wait for dynamic content
-            await page.wait_for_timeout(3000)
+            # Wait for dynamic content (increased for Cloudflare challenge)
+            await page.wait_for_timeout(5000)
             
             html = await page.content()
             

@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y \
   && rm -rf /var/lib/apt/lists/*
 
 ENV MOZ_DISABLE_CONTENT_SANDBOX=1
+ENV CAMOUFOX_SKIP_INIT_CHECK=1
 
 COPY requirements.txt ./
 RUN pip install --no-cache-dir --upgrade pip \
