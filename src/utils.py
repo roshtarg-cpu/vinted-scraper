@@ -29,9 +29,10 @@ async def _fetch(url, proxy_url=None):
     """
     proxy = _parse_proxy(proxy_url)
     
+    # Disable geoip when using proxies (Apify proxies don't support geoip lookups)
     async with AsyncCamoufox(
         headless=True,
-        geoip=True,
+        geoip=False,
         proxy=proxy
     ) as browser:
         page = await browser.new_page()
