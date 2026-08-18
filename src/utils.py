@@ -1,24 +1,29 @@
 """Utility functions for Vinted scraper."""
-from urllib.parse import urlparse, parse_qs
-from camoufox.async_api import AsyncCamoufox
+from urllib.parse import urlparse
+from playwright.async_api import async_playwright
+from playwright_stealth import stealth_async
 
 
 def _parse_proxy(proxy_url):
-    """Parse proxy URL into dict for Camoufox."""
+    """Parse proxy URL into dict for Playwright."""
     if not proxy_url:
         return None
     
     parsed = urlparse(proxy_url)
-    return {
-        'server': f'{parsed.scheme}://{parsed.hostname}:{parsed.port}',
-        'username': parsed.username,
-        'password': parsed.password
+    proxy_dict = {
+        'server': f'{parsed.scheme}://{parsed.hostname}:{parsed.port}'
     }
+    
+    if parsed.username and parsed.password:
+        proxy_dict['username'] = parsed.username
+        proxy_dict['password'] = parsed.password
+    
+    return proxy_dict
 
 
 async def _fetch(url, proxy_url=None):
     """
-    Fetch a page using AsyncCamoufox with Cloudflare bypass.
+    Fetch a page using Playwright with stealth mode.
     
     Args:
         url: Page URL to fetch
@@ -29,27 +34,42 @@ async def _fetch(url, proxy_url=None):
     """
     proxy = _parse_proxy(proxy_url)
     
-    # Disable geoip when using proxies (Apify proxies don't support geoip lookups)
-    async with AsyncCamoufox(
-        headless=True,
-        geoip=False,
-        proxy=proxy
-    ) as browser:
-        page = await browser.new_page()
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(
+            headless=True,
+            proxy=proxy,
+            args=[
+                '--disable-blink-features=AutomationControlled',
+                '--no-sandbox',
+                '--disable-dev-shm-usage'
+            ]
+        )
+        
+        context = await browser.new_context(
+            viewport={'width': 1920, 'height': 1080},
+            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        )
+        
+        page = await context.new_page()
+        
+        # Apply stealth
+        await stealth_async(page)
         
         try:
-            response = await page.goto(url, wait_until='networkidle', timeout=120000)
+            response = await page.goto(url, wait_until='networkidle', timeout=90000)
             
-            # Wait for dynamic content (increased for Cloudflare challenge)
-            await page.wait_for_timeout(5000)
+            # Wait for content to load
+            await page.wait_for_timeout(3000)
             
             html = await page.content()
             
             # Validate response
             if not response or response.status >= 400:
+                print(f"Bad response status: {response.status if response else 'None'}")
                 return None
             
             if len(html) < 500:
+                print(f"HTML too short: {len(html)} bytes")
                 return None
             
             return html
@@ -58,4 +78,4 @@ async def _fetch(url, proxy_url=None):
             print(f"Fetch error for {url}: {e}")
             return None
         finally:
-            await page.close()
+            await browser.close()
