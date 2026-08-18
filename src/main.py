@@ -1,5 +1,6 @@
 """Main Vinted scraper actor."""
 import os
+import asyncio
 from apify import Actor
 from .utils import _fetch
 from .parser import parse_catalog, parse_listing
@@ -21,6 +22,7 @@ async def main():
             groups = proxy_config.get('apifyProxyGroups', ['RESIDENTIAL'])
             group = groups[0] if groups else 'RESIDENTIAL'
             country = proxy_config.get('apifyProxyCountry', 'US')
+            # Correct Apify proxy format
             proxy_url = f'http://groups-{group},{country}:{proxy_password}@proxy.apify.com:8000'
         
         Actor.log.info(f'Starting Vinted scraper: {search_url}')
@@ -43,7 +45,7 @@ async def main():
                 if html:
                     break
                 Actor.log.warning(f'Catalog fetch attempt {attempt + 1} failed, retrying...')
-                await Actor.sleep(2 ** attempt)
+                await asyncio.sleep(2 ** attempt)
             
             if not html:
                 Actor.log.error(f'Failed to fetch catalog page {page_num} after 3 attempts')
@@ -69,7 +71,7 @@ async def main():
                     item_html = await _fetch(item_url, proxy_url)
                     if item_html:
                         break
-                    await Actor.sleep(2 ** attempt)
+                    await asyncio.sleep(2 ** attempt)
                 
                 if not item_html:
                     Actor.log.warning(f'Failed to fetch item {item_url}')
